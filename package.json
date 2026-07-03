@@ -1,0 +1,8 @@
+{
+  "name": "shazam-facial",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.637.0"
+  }
+}

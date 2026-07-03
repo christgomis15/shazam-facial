@@ -22,23 +22,45 @@ Seuils de décision (distance euclidienne) : `< 0,45` sûr · `0,45–0,58` prob
 
 ## Déployer sur Vercel
 
-Site statique, aucune configuration nécessaire.
+Front-end statique + une fonction serverless (`api/celeb.js`). Aucune config manuelle nécessaire,
+Vercel détecte et déploie les deux automatiquement.
 
 ```bash
 git init
 git add .
-git commit -m "Nostalgie IDENT — phase 1"
+git commit -m "Nostalgie IDENT"
 # crée un repo sur GitHub puis :
-git remote add origin https://github.com/<toi>/nostalgie-ident.git
+git remote add origin https://github.com/<toi>/<repo>.git
 git push -u origin main
 ```
 
-Sur vercel.com → **Add New → Project** → importe le repo. Vercel sert `index.html` à la racine automatiquement.
+Sur vercel.com → **Add New → Project** → importe le repo. Vercel sert `index.html` à la racine
+et déploie `api/celeb.js` comme fonction serverless.
 (Alternative sans GitHub : `npm i -g vercel` puis `vercel` dans le dossier.)
 
-## Phase 2 — célébrités mondiales (à venir)
+Pour activer la Phase 2 (célébrités mondiales), configure les variables d'environnement AWS
+décrites ci-dessous.
 
-Les stars internationales absentes du roster ne peuvent pas être reconnues côté navigateur.
-Le plan : une fonction serverless Vercel (`/api/celeb`) qui reçoit un visage « hors roster »
-et appelle **Amazon Rekognition `RecognizeCelebrities`** (clé secrète côté serveur uniquement).
-1 000 images/mois gratuites. Retour : nom + lien Wikidata/IMDB.
+## Phase 2 — célébrités mondiales
+
+Quand un visage identifié est **hors roster**, l'app interroge automatiquement une fonction
+serverless Vercel (`api/celeb.js`) qui appelle **Amazon Rekognition `RecognizeCelebrities`**
+(clé secrète côté serveur uniquement, jamais exposée au navigateur). 1 000 images/mois gratuites
+sur le tier gratuit AWS. Retour : nom de la célébrité + lien (IMDB/Wikidata si disponible).
+
+### Configuration AWS nécessaire
+
+1. Crée un compte AWS si besoin (aws.amazon.com).
+2. Dans **IAM → Users**, crée un utilisateur dédié (ex. `nostalgie-rekognition`) avec accès
+   programmatique uniquement, et attache la permission `AmazonRekognitionReadOnlyAccess`
+   (ou une policy custom limitée à `rekognition:RecognizeCelebrities`).
+3. Récupère l'**Access Key ID** et la **Secret Access Key** générées (visibles une seule fois).
+4. Dans Vercel → ton projet → **Settings → Environment Variables**, ajoute :
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_REGION` (ex. `us-east-1` — vérifie que Rekognition y est disponible)
+5. Redéploie le projet (un nouveau push suffit, ou **Redeploy** depuis le dashboard) pour que
+   les variables soient prises en compte.
+
+Sans ces variables, l'app fonctionne normalement pour le roster local ; la recherche de
+célébrités affichera simplement un message d'indisponibilité.

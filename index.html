@@ -170,6 +170,12 @@
   .res .meta{display:flex;justify-content:space-between;margin-top:7px;
     font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--lo)}
 
+  .celeb-lookup{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line);
+    font-size:12.5px;color:var(--lo)}
+  .celeb-lookup.found{color:var(--hi)}
+  .celeb-lookup.found b{color:var(--amber)}
+  .celeb-lookup a{color:var(--amber-dim)}
+
   footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--line);
     color:#5f584c;font-size:12px;line-height:1.7;max-width:80ch}
   footer b{color:var(--lo);font-weight:600}
@@ -242,7 +248,7 @@
 <footer>
   <b>Comment ça marche —</b> tout tourne dans votre navigateur (face-api.js). Aucune photo n'est envoyée sur un serveur, aucune clé API, aucun coût.
   Seuil de décision : distance &lt; 0,45 = correspondance sûre · 0,45–0,58 = probable · au-delà = inconnu.<br>
-  <b>Phase 2 (célébrités mondiales) —</b> pour couvrir les stars internationales absentes de votre roster, brancher Amazon Rekognition <code style="color:var(--lo)">RecognizeCelebrities</code> côté serveur (voir notes de déploiement).
+  <b>Phase 2 (célébrités mondiales) —</b> les visages hors roster sont automatiquement soumis à Amazon Rekognition <code style="color:var(--lo)">RecognizeCelebrities</code> (fonction serverless <code style="color:var(--lo)">/api/celeb</code>), qui couvre les stars internationales. Nécessite des identifiants AWS configurés sur le déploiement (voir README).
 </footer>
 
 <script>
@@ -339,6 +345,28 @@ function renderRoster(){
   });
 }
 
+/* ---------- Phase 2 : célébrités mondiales (Amazon Rekognition) ---------- */
+async function lookupCelebrity(img, box){
+  const c = document.createElement('canvas');
+  const pad = 0.2;
+  const px = box.width*pad, py = box.height*pad;
+  const x = Math.max(0, box.x-px), y = Math.max(0, box.y-py);
+  const w = Math.min(img.width-x, box.width+2*px), h = Math.min(img.height-y, box.height+2*py);
+  const size = 320;
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(img, x, y, w, h, 0, 0, size, size);
+  const base64 = c.toDataURL('image/jpeg', 0.85).split(',')[1];
+
+  const resp = await fetch('/api/celeb', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({image: base64})
+  });
+  if(!resp.ok) throw new Error('celeb lookup failed: '+resp.status);
+  return resp.json();
+}
+
 /* ---------- Identification ---------- */
 function bestMatch(descriptor){
   let best={name:null,dist:Infinity};
@@ -395,7 +423,7 @@ async function identify(file){
     const tw = ctx.measureText(lbl).width+12;
     ctx.fillStyle=col; ctx.fillRect(b.x*scale, b.y*scale-20, tw, 20);
     ctx.fillStyle='#161310'; ctx.fillText(lbl, b.x*scale+6, b.y*scale-6);
-    rows.push({m,sure,maybe});
+    rows.push({m,sure,maybe,box:b});
   });
 
   // résultats
@@ -417,6 +445,25 @@ async function identify(file){
       <div class="meta"><span>signal de correspondance</span><span>d = ${m.dist.toFixed(3)}</span></div>`;
     R.appendChild(div);
     requestAnimationFrame(()=>{ div.querySelector('.fill').style.width=(fill*100).toFixed(0)+'%'; });
+
+    if(!sure && !maybe){
+      const celebEl = document.createElement('div');
+      celebEl.className = 'celeb-lookup';
+      celebEl.textContent = '🔍 Recherche parmi les célébrités mondiales (Amazon Rekognition)…';
+      div.appendChild(celebEl);
+      lookupCelebrity(img, r.box).then(data=>{
+        const top = (data.celebrities||[])[0];
+        if(top){
+          const link = top.urls[0] ? ` · <a href="https://${top.urls[0]}" target="_blank" rel="noopener">en savoir plus</a>` : '';
+          celebEl.innerHTML = `<b>${top.name}</b> — célébrité reconnue (${top.matchConfidence.toFixed(0)}% de confiance)${link}`;
+          celebEl.classList.add('found');
+        }else{
+          celebEl.textContent = 'Aucune célébrité reconnue par Amazon Rekognition.';
+        }
+      }).catch(()=>{
+        celebEl.textContent = "Service de reconnaissance de célébrités indisponible (Phase 2 non configurée sur ce déploiement).";
+      });
+    }
   });
 
   el('tally').classList.toggle('lit', anySure);
