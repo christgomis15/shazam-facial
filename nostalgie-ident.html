@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nostalgie · IDENT — Reconnaissance d'artistes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js"></script>
+<style>
+  :root{
+    --panel:#161310;        /* charbon chaud, châssis d'équipement */
+    --panel-2:#211d17;      /* surface relevée */
+    --panel-3:#2c261e;      /* creux / drop-zones */
+    --line:#3a3226;
+    --amber:#F2B233;        /* aiguille VU-mètre */
+    --amber-dim:#8a6a24;
+    --onair:#E4432B;        /* lampe tally */
+    --hi:#F1EADB;           /* texte principal, blanc chaud */
+    --lo:#918675;           /* texte secondaire */
+    --ok:#7FB069;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #24201a 0%, transparent 60%),
+      var(--panel);
+    color:var(--hi);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding:clamp(14px,3vw,34px);
+    line-height:1.5;
+  }
+  ::selection{background:var(--amber);color:#161310}
+
+  /* ---- En-tête ---- */
+  header{
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+    padding-bottom:20px;margin-bottom:26px;
+    border-bottom:1px solid var(--line);
+  }
+  .mark{display:flex;align-items:baseline;gap:10px}
+  .mark .fm{
+    font-family:'Oswald',sans-serif;font-weight:700;font-size:clamp(26px,4vw,38px);
+    letter-spacing:.06em;line-height:.9;text-transform:uppercase;
+  }
+  .mark .fm b{color:var(--amber)}
+  .mark .dial{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--lo);
+    border:1px solid var(--line);border-radius:3px;padding:3px 7px;letter-spacing:.05em;
+  }
+  .tag{color:var(--lo);font-size:13.5px;max-width:38ch}
+  .status{
+    margin-left:auto;display:flex;align-items:center;gap:9px;
+    font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.04em;
+    color:var(--lo);border:1px solid var(--line);border-radius:100px;
+    padding:7px 14px;background:var(--panel-2);white-space:nowrap;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--amber-dim);flex:none;transition:.3s}
+  .status.on .dot{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .status.err .dot{background:var(--onair);box-shadow:0 0 10px var(--onair)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .status.load .dot{background:var(--amber);animation:pulse 1s infinite}
+
+  /* ---- Grille régie ---- */
+  .console{display:grid;grid-template-columns:1fr 1fr;gap:clamp(14px,2vw,22px)}
+  @media(max-width:860px){.console{grid-template-columns:1fr}}
+
+  .bay{
+    background:linear-gradient(180deg,var(--panel-2),#1c1813);
+    border:1px solid var(--line);border-radius:10px;
+    padding:clamp(16px,2vw,22px);
+    box-shadow:inset 0 1px 0 #ffffff0a, 0 12px 30px -18px #000;
+  }
+  .bay > h2{
+    font-family:'Oswald',sans-serif;font-weight:600;text-transform:uppercase;
+    letter-spacing:.14em;font-size:14px;color:var(--hi);
+    display:flex;align-items:center;gap:10px;margin-bottom:4px;
+  }
+  .bay > h2 .idx{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:#161310;
+    background:var(--amber);border-radius:3px;padding:2px 6px;font-weight:500;letter-spacing:0;
+  }
+  .bay > .sub{color:var(--lo);font-size:12.5px;margin-bottom:18px}
+
+  label.fld{display:block;font-size:12px;color:var(--lo);letter-spacing:.03em;margin-bottom:7px}
+  input[type=text]{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--hi);
+    font-family:'Inter',sans-serif;font-size:15px;padding:11px 13px;border-radius:7px;
+    transition:border-color .2s;
+  }
+  input[type=text]:focus{outline:none;border-color:var(--amber)}
+  input[type=text]::placeholder{color:#5f584c}
+
+  .drop{
+    margin-top:14px;border:1.5px dashed var(--line);border-radius:9px;
+    background:var(--panel-3);
+    padding:22px 16px;text-align:center;cursor:pointer;transition:.18s;
+    color:var(--lo);font-size:13.5px;
+  }
+  .drop:hover,.drop.hot{border-color:var(--amber);background:#2f281d;color:var(--hi)}
+  .drop b{color:var(--hi);font-weight:600}
+  .drop .ico{font-size:22px;display:block;margin-bottom:7px;filter:grayscale(1) opacity(.7)}
+
+  .btn{
+    font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.08em;
+    font-weight:600;font-size:13px;cursor:pointer;border-radius:7px;padding:11px 16px;
+    border:1px solid var(--line);background:var(--panel-3);color:var(--hi);transition:.16s;
+  }
+  .btn:hover{border-color:var(--amber);color:var(--amber)}
+  .btn.primary{background:var(--amber);color:#161310;border-color:var(--amber)}
+  .btn.primary:hover{background:#ffc94d;color:#161310}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.ghost{background:transparent}
+  .row{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+
+  /* ---- Roster ---- */
+  .roster-head{display:flex;align-items:center;justify-content:space-between;margin:22px 0 10px}
+  .roster-head h3{font-family:'Oswald',sans-serif;text-transform:uppercase;letter-spacing:.1em;font-size:12px;color:var(--lo)}
+  .count{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--amber)}
+  .roster{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow:auto}
+  .card{
+    display:flex;align-items:center;gap:12px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  }
+  .card img{width:44px;height:44px;border-radius:6px;object-fit:cover;flex:none;background:#000}
+  .card .nm{font-weight:600;font-size:14.5px}
+  .card .mt{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--lo)}
+  .card .x{margin-left:auto;color:var(--lo);cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:5px}
+  .card .x:hover{color:var(--onair);background:#2a1c19}
+  .empty{color:#5f584c;font-size:13px;text-align:center;padding:26px 10px;font-style:italic}
+
+  /* ---- Identification ---- */
+  .stage{
+    position:relative;border-radius:9px;overflow:hidden;background:#000;
+    border:1px solid var(--line);margin-top:14px;min-height:180px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .stage canvas{max-width:100%;display:block}
+  .stage .ph{color:#5f584c;font-size:13px;padding:40px;text-align:center}
+
+  .tally{
+    position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:8px;
+    font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:.12em;font-size:12px;
+    background:#0009;border:1px solid var(--onair);color:var(--onair);
+    padding:6px 12px;border-radius:5px;opacity:0;transform:translateY(-4px);transition:.25s;
+    text-transform:uppercase;
+  }
+  .tally.lit{opacity:1;transform:none;box-shadow:0 0 20px -4px var(--onair)}
+  .tally .b{width:9px;height:9px;border-radius:50%;background:var(--onair);box-shadow:0 0 8px var(--onair)}
+
+  .results{margin-top:16px;display:flex;flex-direction:column;gap:12px}
+  .res{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:13px 14px}
+  .res .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:9px}
+  .res .who{font-family:'Oswald',sans-serif;font-weight:600;font-size:19px;letter-spacing:.02em}
+  .res .who.unknown{color:var(--lo)}
+  .res .verdict{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.03em;
+    padding:3px 8px;border-radius:100px;border:1px solid var(--line);color:var(--lo);white-space:nowrap}
+  .res .verdict.sure{color:#161310;background:var(--ok);border-color:var(--ok)}
+  .res .verdict.maybe{color:var(--amber);border-color:var(--amber-dim)}
+
+  /* VU-mètre signature */
+  .vu{height:14px;border-radius:4px;background:#0c0a07;border:1px solid #000;overflow:hidden;position:relative}
+  .vu .fill{height:100%;width:0;transition:width .5s cubic-bezier(.2,.9,.3,1);
+    background:linear-gradient(90deg,var(--amber-dim),var(--amber) 70%,#ffd873)}
+  .vu .ticks{position:absolute;inset:0;display:flex;justify-content:space-between;pointer-events:none}
+  .vu .ticks span{width:1px;background:#00000055}
+  .res .meta{display:flex;justify-content:space-between;margin-top:7px;
+    font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--lo)}
+
+  footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--line);
+    color:#5f584c;font-size:12px;line-height:1.7;max-width:80ch}
+  footer b{color:var(--lo);font-weight:600}
+  a{color:var(--amber-dim)}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">
+    <div class="fm">NOSTALGIE·<b>IDENT</b></div>
+    <span class="dial">101.1 FM</span>
+  </div>
+  <div class="tag">Reconnaissance d'artistes à l'antenne. Enrôlez votre roster, identifiez un visage sur une photo.</div>
+  <div class="status load" id="status"><span class="dot"></span><span id="statusTxt">Chargement des modèles…</span></div>
+</header>
+
+<div class="console">
+
+  <!-- RÉGIE / ENRÔLEMENT -->
+  <section class="bay">
+    <h2><span class="idx">A</span> Régie · Enrôlement</h2>
+    <p class="sub">Ajoutez chaque artiste avec une ou plusieurs photos nettes, visage de face. Plusieurs photos par artiste = reconnaissance plus fiable.</p>
+
+    <label class="fld" for="nm">Nom de l'artiste</label>
+    <input type="text" id="nm" placeholder="Ex. Josey, Didi B, Roseline Layo…" autocomplete="off">
+
+    <div class="drop" id="dropEnrol">
+      <span class="ico">▟</span>
+      <b>Déposez la ou les photos</b> de cet artiste<br>ou cliquez pour parcourir
+    </div>
+    <input type="file" id="fileEnrol" accept="image/*" multiple>
+
+    <div class="roster-head">
+      <h3>Roster enrôlé</h3>
+      <span class="count" id="count">0 artiste · 0 visage</span>
+    </div>
+    <div class="roster" id="roster">
+      <div class="empty">Aucun artiste enrôlé pour l'instant.</div>
+    </div>
+
+    <div class="row">
+      <button class="btn ghost" id="exportBtn" disabled>⤓ Exporter la base</button>
+      <button class="btn ghost" id="importBtn">⤒ Importer une base</button>
+      <input type="file" id="importFile" accept="application/json">
+    </div>
+  </section>
+
+  <!-- IDENTIFICATION -->
+  <section class="bay">
+    <h2><span class="idx">B</span> Identification</h2>
+    <p class="sub">Déposez une photo à identifier. Chaque visage détecté est comparé à votre roster. Le VU-mètre indique la force de la correspondance.</p>
+
+    <div class="drop" id="dropQuery">
+      <span class="ico">◎</span>
+      <b>Déposez la photo à identifier</b><br>ou cliquez pour parcourir
+    </div>
+    <input type="file" id="fileQuery" accept="image/*">
+
+    <div class="stage" id="stage">
+      <div class="ph" id="stagePh">La photo analysée s'affichera ici avec le repérage des visages.</div>
+      <div class="tally" id="tally"><span class="b"></span> ON AIR · MATCH</div>
+    </div>
+
+    <div class="results" id="results"></div>
+  </section>
+</div>
+
+<footer>
+  <b>Comment ça marche —</b> tout tourne dans votre navigateur (face-api.js). Aucune photo n'est envoyée sur un serveur, aucune clé API, aucun coût.
+  Seuil de décision : distance &lt; 0,45 = correspondance sûre · 0,45–0,58 = probable · au-delà = inconnu.<br>
+  <b>Phase 2 (célébrités mondiales) —</b> pour couvrir les stars internationales absentes de votre roster, brancher Amazon Rekognition <code style="color:var(--lo)">RecognizeCelebrities</code> côté serveur (voir notes de déploiement).
+</footer>
+
+<script>
+const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model";
+const T_SURE = 0.45, T_MAYBE = 0.58;   // seuils de distance euclidienne
+
+const el = id => document.getElementById(id);
+const statusEl = el('status'), statusTxt = el('statusTxt');
+let ready = false;
+// roster : { name -> { descriptors:[Float32Array], thumb:dataURL } }
+const roster = new Map();
+
+function setStatus(state, txt){ statusEl.className = 'status ' + state; statusTxt.textContent = txt; }
+
+async function boot(){
+  try{
+    if(typeof faceapi === 'undefined') throw new Error('lib');
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    ready = true;
+    setStatus('on','Modèles prêts · hors-ligne');
+  }catch(e){
+    setStatus('err','Modèles non chargés — déployez sur Vercel ou ouvrez en local');
+    console.error(e);
+  }
+}
+boot();
+
+/* ---------- Utils image ---------- */
+function fileToImage(file){
+  return new Promise((res,rej)=>{
+    const img = new Image();
+    img.onload = ()=>res(img);
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+function makeThumb(img, box){
+  const c = document.createElement('canvas'); c.width=88; c.height=88;
+  const ctx = c.getContext('2d');
+  if(box){
+    const s = Math.max(box.width, box.height);
+    const cx = box.x + box.width/2, cy = box.y + box.height/2;
+    ctx.drawImage(img, cx-s/2, cy-s/2, s, s, 0,0,88,88);
+  }else{
+    ctx.drawImage(img,0,0,88,88);
+  }
+  return c.toDataURL('image/jpeg',0.8);
+}
+
+/* ---------- Enrôlement ---------- */
+async function enrol(files){
+  if(!ready){ alert("Les modèles ne sont pas encore chargés."); return; }
+  const name = el('nm').value.trim();
+  if(!name){ alert("Entrez d'abord le nom de l'artiste."); el('nm').focus(); return; }
+
+  setStatus('load','Analyse de '+name+'…');
+  let added = 0;
+  for(const f of files){
+    try{
+      const img = await fileToImage(f);
+      const det = await faceapi.detectSingleFace(img)
+        .withFaceLandmarks().withFaceDescriptor();
+      if(!det){ continue; }
+      if(!roster.has(name)) roster.set(name,{descriptors:[],thumb:null});
+      const entry = roster.get(name);
+      entry.descriptors.push(det.descriptor);
+      if(!entry.thumb) entry.thumb = makeThumb(img, det.detection.box);
+      added++;
+    }catch(e){ console.error(e); }
+  }
+  setStatus('on','Modèles prêts · hors-ligne');
+  if(added===0){ alert("Aucun visage exploitable détecté sur cette/ces photo(s)."); return; }
+  el('nm').value='';
+  renderRoster();
+}
+
+function renderRoster(){
+  const box = el('roster');
+  let faces=0; roster.forEach(v=>faces+=v.descriptors.length);
+  el('count').textContent = roster.size+' artiste'+(roster.size>1?'s':'')+' · '+faces+' visage'+(faces>1?'s':'');
+  el('exportBtn').disabled = roster.size===0;
+  if(roster.size===0){ box.innerHTML='<div class="empty">Aucun artiste enrôlé pour l\'instant.</div>'; return; }
+  box.innerHTML='';
+  roster.forEach((v,name)=>{
+    const d = document.createElement('div'); d.className='card';
+    d.innerHTML = `<img src="${v.thumb}" alt="">
+      <div><div class="nm">${name}</div>
+      <div class="mt">${v.descriptors.length} visage${v.descriptors.length>1?'s':''} enrôlé${v.descriptors.length>1?'s':''}</div></div>
+      <div class="x" title="Retirer">✕</div>`;
+    d.querySelector('.x').onclick = ()=>{ roster.delete(name); renderRoster(); };
+    box.appendChild(d);
+  });
+}
+
+/* ---------- Identification ---------- */
+function bestMatch(descriptor){
+  let best={name:null,dist:Infinity};
+  roster.forEach((v,name)=>{
+    v.descriptors.forEach(d=>{
+      const dist = faceapi.euclideanDistance(descriptor,d);
+      if(dist<best.dist) best={name,dist};
+    });
+  });
+  return best;
+}
+
+async function identify(file){
+  if(!ready){ alert("Les modèles ne sont pas encore chargés."); return; }
+  if(roster.size===0){ alert("Enrôlez au moins un artiste (panneau A) avant d'identifier."); return; }
+
+  setStatus('load','Identification…');
+  el('results').innerHTML=''; el('tally').classList.remove('lit');
+  const stage = el('stage'); el('stagePh').style.display='none';
+  const img = await fileToImage(file);
+
+  const dets = await faceapi.detectAllFaces(img)
+    .withFaceLandmarks().withFaceDescriptors();
+
+  // dessin
+  const maxW = stage.clientWidth || 400;
+  const scale = Math.min(1, maxW/img.width);
+  const cw = Math.round(img.width*scale), ch = Math.round(img.height*scale);
+  const old = stage.querySelector('canvas'); if(old) old.remove();
+  const canvas = document.createElement('canvas'); canvas.width=cw; canvas.height=ch;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img,0,0,cw,ch);
+  stage.insertBefore(canvas, el('tally'));
+
+  if(dets.length===0){
+    setStatus('on','Modèles prêts · hors-ligne');
+    el('results').innerHTML='<div class="res"><div class="top"><span class="who unknown">Aucun visage détecté</span></div></div>';
+    return;
+  }
+
+  let anySure=false;
+  const rows=[];
+  dets.forEach((det,i)=>{
+    const m = bestMatch(det.descriptor);
+    const b = det.detection.box;
+    const sure = m.dist < T_SURE, maybe = m.dist < T_MAYBE;
+    const col = sure ? '#7FB069' : (maybe ? '#F2B233' : '#918675');
+    if(sure) anySure=true;
+    // cadre + étiquette
+    ctx.lineWidth=2; ctx.strokeStyle=col;
+    ctx.strokeRect(b.x*scale,b.y*scale,b.width*scale,b.height*scale);
+    const lbl = (sure||maybe)? m.name : '?';
+    ctx.font='600 13px Inter, sans-serif';
+    const tw = ctx.measureText(lbl).width+12;
+    ctx.fillStyle=col; ctx.fillRect(b.x*scale, b.y*scale-20, tw, 20);
+    ctx.fillStyle='#161310'; ctx.fillText(lbl, b.x*scale+6, b.y*scale-6);
+    rows.push({m,sure,maybe});
+  });
+
+  // résultats
+  const R = el('results');
+  rows.sort((a,b)=>a.m.dist-b.m.dist).forEach(r=>{
+    const {m,sure,maybe}=r;
+    const fill = Math.max(0, Math.min(1, 1 - m.dist)); // 0..1
+    const who = (sure||maybe)? m.name : 'Inconnu';
+    const vClass = sure?'sure':(maybe?'maybe':'');
+    const vTxt = sure?'CORRESPONDANCE SÛRE':(maybe?'PROBABLE':'HORS ROSTER');
+    const div=document.createElement('div'); div.className='res';
+    div.innerHTML=`
+      <div class="top">
+        <span class="who ${(sure||maybe)?'':'unknown'}">${who}</span>
+        <span class="verdict ${vClass}">${vTxt}</span>
+      </div>
+      <div class="vu"><div class="fill" style="width:0%"></div>
+        <div class="ticks">${'<span></span>'.repeat(9)}</div></div>
+      <div class="meta"><span>signal de correspondance</span><span>d = ${m.dist.toFixed(3)}</span></div>`;
+    R.appendChild(div);
+    requestAnimationFrame(()=>{ div.querySelector('.fill').style.width=(fill*100).toFixed(0)+'%'; });
+  });
+
+  el('tally').classList.toggle('lit', anySure);
+  setStatus('on','Modèles prêts · hors-ligne');
+}
+
+/* ---------- Export / Import ---------- */
+el('exportBtn').onclick = ()=>{
+  const out=[];
+  roster.forEach((v,name)=>out.push({name, thumb:v.thumb,
+    descriptors: v.descriptors.map(d=>Array.from(d))}));
+  const blob=new Blob([JSON.stringify({app:'nostalgie-ident',v:1,roster:out})],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='roster-nostalgie.json'; a.click();
+};
+el('importBtn').onclick = ()=> el('importFile').click();
+el('importFile').onchange = async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const data=JSON.parse(await f.text());
+    (data.roster||[]).forEach(r=>{
+      roster.set(r.name,{thumb:r.thumb,
+        descriptors:(r.descriptors||[]).map(a=>new Float32Array(a))});
+    });
+    renderRoster();
+  }catch(err){ alert("Fichier invalide."); }
+  e.target.value='';
+};
+
+/* ---------- Câblage drop-zones ---------- */
+function wireDrop(dropId, inputId, handler){
+  const drop=el(dropId), input=el(inputId);
+  drop.onclick=()=>input.click();
+  input.onchange=e=>{ if(e.target.files.length) handler(e.target.files); e.target.value=''; };
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot')}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot')}));
+  drop.addEventListener('drop',e=>{ if(e.dataTransfer.files.length) handler(e.dataTransfer.files); });
+}
+wireDrop('dropEnrol','fileEnrol', files=>enrol(files));
+wireDrop('dropQuery','fileQuery', files=>identify(files[0]));
+
+el('nm').addEventListener('keydown',e=>{ if(e.key==='Enter') el('fileEnrol').click(); });
+</script>
+</body>
+</html>
